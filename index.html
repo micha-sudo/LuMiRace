@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -55,6 +55,14 @@
         <p>Je moet eerst je naam kiezen voordat je kunt spelen.</p>
         <input id="playerNameInput" type="text" maxlength="24" placeholder="Bijv. Jelle" />
         <button id="savePlayerNameBtn" class="primary-btn" type="button">Start</button>
+      </div>
+    </div>
+
+    <div id="giftOverlay" class="gift-overlay hidden">
+      <div class="gift-card">
+        <div class="gift-label">The admin sent you a gift!</div>
+        <div id="giftDetail" class="gift-detail">Claim your reward</div>
+        <button id="claimGiftBtn" class="primary-btn" type="button">Claim</button>
       </div>
     </div>
 
@@ -178,11 +186,14 @@
             </div>
             <div class="admin-actions">
               <label class="admin-input">Mijn naam<select id="playerSelect"></select></label>
+              <label class="admin-input">Give to<select id="adminTargetSelect"></select></label>
+              <label class="admin-input">Car<select id="adminCarSelect"></select></label>
+              <button id="giveCarToPlayerBtn" class="shop-button" type="button">Give Car</button>
               <label class="admin-input">Diamonds geven<input id="adminGiftDiamonds" type="number" min="1" value="50"></label>
               <button id="giveDiamondsToPlayerBtn" class="shop-button" type="button">Give Diamonds</button>
               <label class="admin-input">Score geven<input id="adminGiftScore" type="number" min="1" value="500"></label>
               <button id="giveScoreToPlayerBtn" class="shop-button" type="button">Give Score</button>
-              <button id="giveCarsBtn" class="shop-button" type="button">Give all cars to me</button>
+              <button id="giveCarsBtn" class="shop-button" type="button">Give All Cars</button>
               <button id="startTacoEventBtn" class="shop-button" type="button">Global Taco Rain</button>
               <button id="startGalaxyEventBtn" class="shop-button" type="button">Global Galaxy Event</button>
               <input id="globalMessageInput" class="admin-message-input" type="text" maxlength="120" placeholder="Global message...">
