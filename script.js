@@ -1,89 +1,26 @@
-﻿const defaultStorage = {
+const defaultStorage = {
   diamonds: 0,
   selectedCar: "starter",
   selectedMap: "city",
-  player: "Lukaas",
+  player: "",
   ownedCars: ["starter"]
 };
 
 const storage = { ...defaultStorage };
-const defaultAdminNames = ["Lukaas", "Mich"];
 
-function normalizeName(value) {
-  return String(value || "").trim().replace(/\s+/g, " ");
+const storedPlayerName = localStorage.getItem("lumiPlayer");
+if (storedPlayerName) {
+  storage.player = storedPlayerName;
 }
 
-function readProfiles() {
-  try {
-    const raw = localStorage.getItem("lumiPlayerProfiles");
-    const parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch (error) {
-    return {};
-  }
-}
-
-function getKnownPlayers() {
-  return [...defaultAdminNames];
-}
-
-function syncKnownPlayers() {
-  return getKnownPlayers();
-}
-
-function ensurePlayerProfile(name) {
-  const safeName = normalizeName(name);
-  if (!safeName) return;
-
-  const profiles = readProfiles();
-  profiles[safeName] = profiles[safeName] || {
-    diamonds: 0,
-    selectedCar: "starter",
-    selectedMap: "city",
-    ownedCars: ["starter"],
-    score: 0
-  };
-
-  localStorage.setItem("lumiPlayerProfiles", JSON.stringify(profiles));
-}
-
-function loadCurrentPlayerProfile() {
-  const currentPlayer = normalizeName(localStorage.getItem("lumiPlayer") || "Lukaas");
-  storage.player = currentPlayer;
-
-  const profiles = readProfiles();
-  const profile = profiles[currentPlayer] || {
-    diamonds: Number(storage.diamonds || 0),
-    selectedCar: storage.selectedCar || "starter",
-    selectedMap: storage.selectedMap || "city",
-    ownedCars: [...(Array.isArray(storage.ownedCars) ? storage.ownedCars : ["starter"])],
-    score: Number(gameState ? gameState.score || 0 : 0)
-  };
-
-  storage.diamonds = Number(profile.diamonds || 0);
-  storage.selectedCar = profile.selectedCar || "starter";
-  storage.selectedMap = profile.selectedMap || "city";
-  storage.ownedCars = Array.isArray(profile.ownedCars) && profile.ownedCars.length ? [...profile.ownedCars] : ["starter"];
-
-  if (!profiles[currentPlayer]) {
-    profiles[currentPlayer] = profile;
-    localStorage.setItem("lumiPlayerProfiles", JSON.stringify(profiles));
-  }
-
-  return profile;
-}
-
-const profileForCurrentUser = defaultStorage;
+const storedProfiles = JSON.parse(localStorage.getItem("lumiPlayerProfiles") || "{}");
+const profileForCurrentUser = storedProfiles[storage.player] || defaultStorage;
 storage.diamonds = Number(profileForCurrentUser.diamonds || 0);
 storage.selectedCar = profileForCurrentUser.selectedCar || "starter";
 storage.selectedMap = profileForCurrentUser.selectedMap || "city";
 storage.ownedCars = Array.isArray(profileForCurrentUser.ownedCars) && profileForCurrentUser.ownedCars.length
   ? [...profileForCurrentUser.ownedCars]
   : ["starter"];
-
-storage.player = normalizeName(storage.player) || "Lukaas";
-ensurePlayerProfile(storage.player);
-loadCurrentPlayerProfile();
 syncKnownPlayers();
 
 Object.keys(defaultStorage).forEach((key) => {
@@ -137,13 +74,19 @@ const globalMessageInput = document.getElementById("globalMessageInput");
 const sendGlobalMessageBtn = document.getElementById("sendGlobalMessageBtn");
 const autoRaceBtn = document.getElementById("autoRaceBtn");
 const closeAdminBtn = document.getElementById("closeAdminBtn");
+const adminTargetSelect = document.getElementById("adminTargetSelect");
+const adminCarSelect = document.getElementById("adminCarSelect");
 const adminGiftDiamonds = document.getElementById("adminGiftDiamonds");
 const adminGiftScore = document.getElementById("adminGiftScore");
+const giveCarToPlayerBtn = document.getElementById("giveCarToPlayerBtn");
 const giveDiamondsToPlayerBtn = document.getElementById("giveDiamondsToPlayerBtn");
 const giveScoreToPlayerBtn = document.getElementById("giveScoreToPlayerBtn");
 const playerNameInput = document.getElementById("playerNameInput");
 const savePlayerNameBtn = document.getElementById("savePlayerNameBtn");
 const playerSetupOverlay = document.getElementById("playerSetupOverlay");
+const giftOverlay = document.getElementById("giftOverlay");
+const giftDetail = document.getElementById("giftDetail");
+const claimGiftBtn = document.getElementById("claimGiftBtn");
 const speedNeedle = document.getElementById("speedNeedle");
 const gameArea = document.getElementById("gameArea");
 const crashShopBtn = document.getElementById("crashShopBtn");
@@ -155,124 +98,143 @@ const tacoMusic = document.getElementById("tacoMusic");
 const galaxyMusic = document.getElementById("galaxyMusic");
 const MUSIC_VOLUME = 0.25;
 
-const firebaseConfigs = [
-  {
-    name: "LuMiRace",
-    apiKey: "AIzaSyDbXgHX43UoNG2yKhaFkXQmLgNV4SGlh-A",
-    authDomain: "lumirace-d2426.firebaseapp.com",
-    databaseURL: "https://lumirace-d2426-default-rtdb.firebaseio.com",
-    projectId: "lumirace-d2426",
-    storageBucket: "lumirace-d2426.firebasestorage.app",
-    messagingSenderId: "863831691846",
-    appId: "1:863831691846:web:82c77ad1bc1fb9bd817047",
-    measurementId: "G-8JLWSSFN49"
-  },
-  {
-    name: "LuMiRace1",
-    apiKey: "",
-    authDomain: "",
-    databaseURL: "",
-    projectId: "",
-    storageBucket: "",
-    messagingSenderId: "",
-    appId: "",
-    measurementId: ""
-  }
-];
+const firebaseConfig = {
+  apiKey: "AIzaSyDbXgHX43UoNG2yKhaFkXQmLgNV4SGlh-A",
+  authDomain: "lumirace-d2426.firebaseapp.com",
+  databaseURL: "https://lumirace-d2426-default-rtdb.firebaseio.com",
+  projectId: "lumirace-d2426",
+  storageBucket: "lumirace-d2426.firebasestorage.app",
+  messagingSenderId: "863831691846",
+  appId: "1:863831691846:web:82c77ad1bc1fb9bd817047",
+  measurementId: "G-8JLWSSFN49"
+};
 
-function initializeFirebaseConnection() {
-  if (typeof firebase === "undefined") return null;
-
-  const validConfigs = firebaseConfigs.filter((config) => config && config.databaseURL && config.apiKey && config.projectId);
-
-  for (const config of validConfigs) {
-    try {
-      const hasApp = firebase.apps.some((app) => app.name === config.projectId || app.options && app.options.projectId === config.projectId);
-      if (!hasApp) {
-        firebase.initializeApp(config, config.projectId);
-      }
-
-      const app = firebase.app(config.projectId);
-      return {
-        app,
-        database: app.database(),
-        config
-      };
-    } catch (error) {
-      console.warn(`Firebase init failed for ${config.name}:`, error);
-    }
-  }
-
-  return null;
-}
-
-const firebaseConnection = initializeFirebaseConnection();
-const globalMessages = firebaseConnection ? firebaseConnection.database.ref("globalMessages") : null;
-const globalEvents = firebaseConnection ? firebaseConnection.database.ref("globalEvents") : null;
+const firebaseReady = typeof firebase !== "undefined";
+const globalMessages = firebaseReady ? (() => {
+  firebase.initializeApp(firebaseConfig);
+  return firebase.database().ref("globalMessages");
+})() : null;
+const globalEvents = firebaseReady ? firebase.database().ref("globalEvents") : null;
 
 [lobbyMusic, driveMusic, crashSound, tacoMusic, galaxyMusic].forEach((audio) => {
   audio.volume = MUSIC_VOLUME;
 });
 
-function getKnownPlayers() {
-  return [...defaultAdminNames];
+function normalizeName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
 }
 
 function syncKnownPlayers() {
-  const known = getKnownPlayers();
-  localStorage.setItem("lumiKnownPlayers", JSON.stringify(known));
-  return known;
+  const profiles = JSON.parse(localStorage.getItem("lumiPlayerProfiles") || "{}");
+  const fromProfiles = Object.keys(profiles)
+    .map((name) => normalizeName(name))
+    .filter(Boolean);
+
+  const fromLegacy = (JSON.parse(localStorage.getItem("lumiKnownPlayers") || "[]"))
+    .map((name) => normalizeName(name))
+    .filter(Boolean);
+
+  const currentPlayer = normalizeName(storage.player);
+  const merged = [...fromProfiles, ...fromLegacy, ...(currentPlayer ? [currentPlayer] : [])]
+    .filter((name, index, array) => name && array.indexOf(name) === index);
+
+  localStorage.setItem("lumiKnownPlayers", JSON.stringify(merged));
+  return merged;
+}
+
+function getKnownPlayers() {
+  return syncKnownPlayers();
+}
+
+function ensurePlayerProfile(name) {
+  const safeName = normalizeName(name);
+  if (!safeName) return;
+
+  const profiles = JSON.parse(localStorage.getItem("lumiPlayerProfiles") || "{}");
+  if (!profiles[safeName]) {
+    profiles[safeName] = {
+      diamonds: 0,
+      selectedCar: "starter",
+      selectedMap: "city",
+      ownedCars: ["starter"],
+      score: 0
+    };
+  }
+
+  localStorage.setItem("lumiPlayerProfiles", JSON.stringify(profiles));
+  syncKnownPlayers();
 }
 
 function showGiftOverlay(message) {
-  return;
+  giftDetail.textContent = message;
+  giftOverlay.classList.remove("hidden");
 }
 
 function hideGiftOverlay() {
+  giftOverlay.classList.add("hidden");
   localStorage.removeItem("lumiPendingGift");
 }
 
+function scheduleGiftClaim(gift) {
+  localStorage.setItem("lumiPendingGift", JSON.stringify(gift));
+  showGiftOverlay(gift.message);
+}
+
 function processIncomingGift() {
-  localStorage.removeItem("lumiPendingGift");
+  const pendingGiftRaw = localStorage.getItem("lumiPendingGift");
+  if (!pendingGiftRaw) return;
+
+  try {
+    const pendingGift = JSON.parse(pendingGiftRaw);
+    if (!pendingGift || !pendingGift.message) return;
+    showGiftOverlay(pendingGift.message);
+  } catch (error) {
+    localStorage.removeItem("lumiPendingGift");
+  }
 }
 
 function refreshKnownPlayers() {
   const names = getKnownPlayers();
-  const deviceName = normalizeName(getDeviceName());
-  const currentPlayer = normalizeName(storage.player);
-  const options = names.length ? names : [currentPlayer || deviceName || "Player"];
+  const options = names.length ? names : [storage.player || "Player"];
 
-  const rendered = [...new Set(options.map((name) => normalizeName(name)).filter(Boolean))];
-  playerSelect.innerHTML = rendered.map((name) => `<option value="${name}">${name}</option>`).join("");
+  const buildOptions = (select, value) => {
+    select.innerHTML = options.map((name) => `<option value="${name}">${name}</option>`).join("");
+    if (options.includes(value)) {
+      select.value = value;
+    } else if (options[0]) {
+      select.value = options[0];
+    }
+  };
 
-  const valueToUse = normalizeName(currentPlayer || rendered[0] || deviceName || "Lukaas");
-  if (rendered.includes(valueToUse)) {
-    playerSelect.value = valueToUse;
-  } else if (rendered[0]) {
-    playerSelect.value = rendered[0];
-  }
-
-  storage.player = valueToUse;
+  buildOptions(playerSelect, storage.player);
+  buildOptions(adminTargetSelect, storage.player || options[0]);
+  adminCarSelect.innerHTML = cars
+    .filter((car) => !car.adminOnly)
+    .map((car) => `<option value="${car.id}">${car.name}</option>`)
+    .join("");
 }
 
 function saveProgress() {
-  const safeName = normalizeName(storage.player) || normalizeName(playerSelect.value) || "Lukaas";
-  storage.player = safeName;
-  localStorage.setItem("lumiPlayer", safeName);
+  const safeName = normalizeName(storage.player);
+  if (!safeName) {
+    localStorage.removeItem("lumiPlayer");
+    return;
+  }
 
   ensurePlayerProfile(safeName);
+  localStorage.setItem("lumiPlayer", safeName);
 
-  const profiles = readProfiles();
+  const profiles = JSON.parse(localStorage.getItem("lumiPlayerProfiles") || "{}");
   profiles[safeName] = {
     diamonds: Number(storage.diamonds || 0),
     selectedCar: storage.selectedCar,
     selectedMap: storage.selectedMap,
-    ownedCars: [...new Set((Array.isArray(storage.ownedCars) ? storage.ownedCars : ["starter"]).map((carId) => normalizeName(carId) || carId))],
+    ownedCars: [...storage.ownedCars],
     score: Number(Math.floor(gameState.score || 0))
   };
 
   localStorage.setItem("lumiPlayerProfiles", JSON.stringify(profiles));
-  syncKnownPlayers();
+  localStorage.setItem("lumiKnownPlayers", JSON.stringify(getKnownPlayers()));
 }
 
 const gameState = {
@@ -338,7 +300,7 @@ function sendGlobalMessage() {
   const message = globalMessageInput.value.trim();
   if (!message) return;
 
-  const sender = ["Lukaas", "Mich"].includes(playerSelect.value) ? playerSelect.value : "Lukaas";
+  const sender = playerSelect.value === "micha" ? "Mich" : "Lukaas";
   const fullMessage = `${sender}: ${message}`;
   showGlobalMessage(fullMessage);
   globalMessageInput.value = "";
@@ -520,7 +482,9 @@ function showGarageView(viewName) {
     tab.classList.toggle("active", tab.dataset.view === nextView);
   });
 
-  shopPanel.classList.remove("hidden");
+  if (nextView !== "admin") {
+    shopPanel.classList.remove("hidden");
+  }
 }
 
 function renderInventory() {
@@ -592,13 +556,11 @@ function buildShop() {
 
       if (storage.diamonds >= car.price) {
         storage.diamonds -= car.price;
-        storage.ownedCars = [...new Set([...storage.ownedCars, carId])];
-        storage.selectedCar = carId;
+        storage.ownedCars.push(carId);
         saveProgress();
         buildShop();
         renderInventory();
         updateHud();
-        applyCarSkin(carId);
         showBanner(`${car.name} unlocked`);
       } else {
         showBanner("Not enough diamonds");
@@ -612,7 +574,7 @@ function resetGame() {
   stopAudio(crashSound);
   playAudio(driveMusic);
   crashOverlay.classList.remove("visible");
-  shopPanel.classList.remove("hidden");
+  shopPanel.classList.add("hidden");
   applyMap(storage.selectedMap);
   mapSelect.disabled = true;
   gameState.running = true;
@@ -701,7 +663,7 @@ function updatePlayerProfile(targetName, updater) {
   const safeName = normalizeName(targetName);
   if (!safeName) return;
 
-  const profiles = readProfiles();
+  const profiles = JSON.parse(localStorage.getItem("lumiPlayerProfiles") || "{}");
   const profile = profiles[safeName] || {
     diamonds: 0,
     selectedCar: "starter",
@@ -713,7 +675,7 @@ function updatePlayerProfile(targetName, updater) {
   updater(profile);
   profiles[safeName] = profile;
   localStorage.setItem("lumiPlayerProfiles", JSON.stringify(profiles));
-  syncKnownPlayers();
+  localStorage.setItem("lumiKnownPlayers", JSON.stringify(getKnownPlayers()));
 }
 
 function giftPlayer(targetName, gift) {
@@ -736,6 +698,28 @@ function giftPlayer(targetName, gift) {
       profile.score = (Number(profile.score) || 0) + Number(gift.amount || 0);
     }
   });
+
+  const currentUser = normalizeName(storage.player);
+  const message = gift.type === "car"
+    ? `${gift.carName} received from the admin`
+    : `${gift.amount} ${gift.type === "diamonds" ? "diamonds" : "score"} received from the admin`;
+
+  if (safeName === currentUser) {
+    showGiftOverlay(`The admin sent you a gift!\n${message}`);
+    return;
+  }
+
+  const giftStore = {
+    type: gift.type,
+    amount: gift.amount,
+    carId: gift.carId,
+    carName: gift.carName,
+    message: `The admin sent you a gift!\n${message}`,
+    target: safeName,
+    createdAt: Date.now()
+  };
+
+  localStorage.setItem(`lumiGiftFor_${safeName}`, JSON.stringify(giftStore));
 }
 
 function unlockCarForPlayer(playerName, carId) {
@@ -748,34 +732,18 @@ function unlockCarForPlayer(playerName, carId) {
 }
 
 function giveDiamondsToPlayer(playerName, amount) {
-  const safeName = normalizeName(playerName || playerSelect.value || storage.player || "Lukaas");
+  const safeName = normalizeName(playerName);
   if (!safeName || !Number.isFinite(amount) || amount <= 0) return;
 
-  const profiles = readProfiles();
-  const current = profiles[safeName] || { diamonds: 0, selectedCar: "starter", selectedMap: "city", ownedCars: ["starter"], score: 0 };
-  current.diamonds = (Number(current.diamonds) || 0) + Number(amount);
-  profiles[safeName] = current;
-  localStorage.setItem("lumiPlayerProfiles", JSON.stringify(profiles));
-  storage.player = safeName;
-  storage.diamonds = Number(current.diamonds);
-  localStorage.setItem("lumiPlayer", safeName);
-  updateHud();
+  giftPlayer(safeName, { type: "diamonds", amount });
   showBanner(`+${amount} diamonds to ${safeName}`);
 }
 
 function giveScoreToPlayer(playerName, amount) {
-  const safeName = normalizeName(playerName || playerSelect.value || storage.player || "Lukaas");
+  const safeName = normalizeName(playerName);
   if (!safeName || !Number.isFinite(amount) || amount <= 0) return;
 
-  const profiles = readProfiles();
-  const current = profiles[safeName] || { diamonds: 0, selectedCar: "starter", selectedMap: "city", ownedCars: ["starter"], score: 0 };
-  current.score = (Number(current.score) || 0) + Number(amount);
-  profiles[safeName] = current;
-  localStorage.setItem("lumiPlayerProfiles", JSON.stringify(profiles));
-  storage.player = safeName;
-  gameState.score = Number(current.score);
-  localStorage.setItem("lumiPlayer", safeName);
-  updateHud();
+  giftPlayer(safeName, { type: "score", amount });
   showBanner(`+${amount} score to ${safeName}`);
 }
 
@@ -800,20 +768,10 @@ function addAdminScore() {
 }
 
 function giveAllCars() {
-  const targetName = normalizeName(playerSelect.value || storage.player || "Lukaas");
-  const profiles = readProfiles();
-  const current = profiles[targetName] || { diamonds: 0, selectedCar: "starter", selectedMap: "city", ownedCars: ["starter"], score: 0 };
-  current.ownedCars = [...new Set([...cars.map((car) => car.id), ...(Array.isArray(current.ownedCars) ? current.ownedCars : ["starter"])])];
-  current.selectedCar = current.ownedCars[current.ownedCars.length - 1] || "starter";
-  profiles[targetName] = current;
-  localStorage.setItem("lumiPlayerProfiles", JSON.stringify(profiles));
-  storage.player = targetName;
-  storage.ownedCars = [...current.ownedCars];
-  storage.selectedCar = current.selectedCar;
-  localStorage.setItem("lumiPlayer", targetName);
+  storage.ownedCars = cars.map((car) => car.id);
+  saveProgress();
   buildShop();
-  renderInventory();
-  showBanner(`All cars unlocked for ${targetName}`);
+  showBanner("All cars unlocked");
 }
 
 function updateDayNight(delta) {
@@ -1107,29 +1065,23 @@ function tick(timestamp) {
 window.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
   const activeElement = document.activeElement;
-  const targetElement = event.target || activeElement;
-  const isTypingInInput = !!(targetElement && (
-    targetElement.tagName === "INPUT" ||
-    targetElement.tagName === "TEXTAREA" ||
-    targetElement.tagName === "SELECT" ||
-    targetElement.isContentEditable
+  const isTypingInInput = !!(activeElement && (
+    activeElement.tagName === "INPUT" ||
+    activeElement.tagName === "TEXTAREA" ||
+    activeElement.tagName === "SELECT" ||
+    activeElement.isContentEditable
   ));
-
-  if (isTypingInInput) {
-    if (event.code === "Space" || event.key === " ") {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-    if (!event.ctrlKey && !event.altKey && event.key.length === 1 && event.key !== " ") {
-      window.adminCommand = `${window.adminCommand || ""}${key}`.slice(-16);
-      if (window.adminCommand === "openadminpanel10") openAdminPanel();
-    }
-    return;
-  }
 
   if (!event.ctrlKey && !event.altKey && event.key.length === 1) {
     window.adminCommand = `${window.adminCommand || ""}${key}`.slice(-16);
     if (window.adminCommand === "openadminpanel10") openAdminPanel();
+  }
+
+  if (isTypingInInput) {
+    if (event.code === "Space") {
+      event.preventDefault();
+    }
+    return;
   }
 
   if (key === "arrowleft" || key === "a") {
@@ -1180,11 +1132,6 @@ startTacoEventBtn.addEventListener("click", () => startGlobalEvent("taco"));
 startGalaxyEventBtn.addEventListener("click", () => startGlobalEvent("galaxy"));
 sendGlobalMessageBtn.addEventListener("click", sendGlobalMessage);
 globalMessageInput.addEventListener("keydown", (event) => {
-  if (event.code === "Space" || event.key === " ") {
-    event.stopPropagation();
-    return;
-  }
-
   if (event.key === "Enter") sendGlobalMessage();
 });
 autoRaceBtn.addEventListener("click", () => {
@@ -1193,15 +1140,22 @@ autoRaceBtn.addEventListener("click", () => {
   showBanner(gameState.autoRace ? "Auto race active" : "Auto race off");
 });
 
+giveCarToPlayerBtn.addEventListener("click", () => {
+  const target = normalizeName(adminTargetSelect.value);
+  const carId = adminCarSelect.value;
+  if (!target || !carId) return;
+  unlockCarForPlayer(target, carId);
+});
+
 giveDiamondsToPlayerBtn.addEventListener("click", () => {
-  const target = normalizeName(playerSelect.value || storage.player || "Lukaas");
+  const target = normalizeName(adminTargetSelect.value);
   const amount = Number(adminGiftDiamonds.value || 0);
   if (!target || !amount || amount <= 0) return;
   giveDiamondsToPlayer(target, amount);
 });
 
 giveScoreToPlayerBtn.addEventListener("click", () => {
-  const target = normalizeName(playerSelect.value || storage.player || "Lukaas");
+  const target = normalizeName(adminTargetSelect.value);
   const amount = Number(adminGiftScore.value || 0);
   if (!target || !amount || amount <= 0) return;
   giveScoreToPlayer(target, amount);
@@ -1224,8 +1178,12 @@ garageTabs.forEach((tab) => {
 });
 
 startBtn.addEventListener("click", () => {
-  storage.player = normalizeName(storage.player) || "Lukaas";
-  if (playerSetupOverlay) playerSetupOverlay.classList.add("hidden");
+  if (!storage.player || !normalizeName(storage.player)) {
+    playerSetupOverlay.classList.remove("hidden");
+    showBanner("Voer eerst je naam in");
+    return;
+  }
+
   resetGame();
 });
 
@@ -1235,27 +1193,64 @@ mapSelect.addEventListener("change", () => {
   showBanner(`${mapSelect.options[mapSelect.selectedIndex].text} selected`);
 });
 
-playerSelect.value = storage.player || "Lukaas";
+playerSelect.value = storage.player || "";
 playerSelect.addEventListener("change", () => {
-  const nextName = normalizeName(playerSelect.value) || "Lukaas";
+  const nextName = normalizeName(playerSelect.value);
+  if (!nextName) return;
+
   storage.player = nextName;
   ensurePlayerProfile(nextName);
   localStorage.setItem("lumiPlayer", nextName);
   refreshKnownPlayers();
-  showBanner(`Gebruiker: ${nextName}`);
+  showBanner(`Naam ingesteld: ${nextName}`);
 });
 
-if (savePlayerNameBtn) {
-  savePlayerNameBtn.addEventListener("click", () => {
-    storage.player = normalizeName(playerNameInput.value) || "Lukaas";
-    ensurePlayerProfile(storage.player);
-    localStorage.setItem("lumiPlayer", storage.player);
-    if (playerSetupOverlay) playerSetupOverlay.classList.add("hidden");
-    refreshKnownPlayers();
-    showBanner(`Welkom ${storage.player}`);
-  });
-}
+savePlayerNameBtn.addEventListener("click", () => {
+  const enteredName = normalizeName(playerNameInput.value);
+  if (!enteredName) {
+    showBanner("Voer je naam in");
+    return;
+  }
 
+  const userExists = getKnownPlayers().includes(enteredName);
+  if (userExists && storage.player !== enteredName) {
+    showBanner("Deze naam is al in gebruik");
+    return;
+  }
+
+  storage.player = enteredName;
+  ensurePlayerProfile(enteredName);
+  syncKnownPlayers();
+  localStorage.setItem("lumiPlayer", enteredName);
+  refreshKnownPlayers();
+  playerSetupOverlay.classList.add("hidden");
+  showBanner(`Welkom ${enteredName}`);
+});
+
+claimGiftBtn.addEventListener("click", () => {
+  const pendingGiftKey = `lumiGiftFor_${normalizeName(storage.player)}`;
+  const pendingGiftRaw = localStorage.getItem(pendingGiftKey);
+
+  if (!pendingGiftRaw) {
+    hideGiftOverlay();
+    return;
+  }
+
+  const pendingGift = JSON.parse(pendingGiftRaw);
+  if (pendingGift && pendingGift.type === "car" && pendingGift.carId) {
+    const profile = JSON.parse(localStorage.getItem("lumiPlayerProfiles") || "{}");
+    const item = profile[normalizeName(storage.player)] || { ownedCars: ["starter"] };
+    if (!item.ownedCars.includes(pendingGift.carId)) {
+      item.ownedCars.push(pendingGift.carId);
+      profile[normalizeName(storage.player)] = item;
+      localStorage.setItem("lumiPlayerProfiles", JSON.stringify(profile));
+    }
+  }
+
+  localStorage.removeItem(pendingGiftKey);
+  hideGiftOverlay();
+  showBanner("Gift claimed");
+});
 
 shopBtn.addEventListener("click", () => {
   if (gameState.running) {
@@ -1271,7 +1266,11 @@ tryAgainBtn.addEventListener("click", resetGame);
 
 addCarWheels(playerCar);
 refreshKnownPlayers();
-if (playerSetupOverlay) playerSetupOverlay.classList.add("hidden");
+if (!storage.player || !normalizeName(storage.player)) {
+  playerSetupOverlay.classList.remove("hidden");
+} else {
+  playerSetupOverlay.classList.add("hidden");
+}
 processIncomingGift();
 applyCarSkin(storage.selectedCar || "starter");
 applyMap(storage.selectedMap || "city");
