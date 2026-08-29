@@ -1,33 +1,9 @@
-const defaultStorage = {
-  diamonds: 0,
-  selectedCar: "starter",
-  selectedMap: "city",
-  player: "",
-  ownedCars: ["starter"]
+const storage = {
+  diamonds: Number(localStorage.getItem("lumiDiamonds") || 0),
+  selectedCar: localStorage.getItem("lumiSelectedCar") || "starter",
+  selectedMap: localStorage.getItem("lumiSelectedMap") || "city",
+  ownedCars: JSON.parse(localStorage.getItem("lumiOwnedCars") || '["starter"]')
 };
-
-const storage = { ...defaultStorage };
-
-const storedPlayerName = localStorage.getItem("lumiPlayer");
-if (storedPlayerName) {
-  storage.player = storedPlayerName;
-}
-
-const storedProfiles = JSON.parse(localStorage.getItem("lumiPlayerProfiles") || "{}");
-const profileForCurrentUser = storedProfiles[storage.player] || defaultStorage;
-storage.diamonds = Number(profileForCurrentUser.diamonds || 0);
-storage.selectedCar = profileForCurrentUser.selectedCar || "starter";
-storage.selectedMap = profileForCurrentUser.selectedMap || "city";
-storage.ownedCars = Array.isArray(profileForCurrentUser.ownedCars) && profileForCurrentUser.ownedCars.length
-  ? [...profileForCurrentUser.ownedCars]
-  : ["starter"];
-syncKnownPlayers();
-
-Object.keys(defaultStorage).forEach((key) => {
-  if (key === "ownedCars") {
-    storage.ownedCars = [...storage.ownedCars];
-  }
-});
 
 const cars = [
   { id: "starter", name: "Blue Racer", price: 0, accent: "#2965ef", image: "download (8).png", description: "Base model" },
@@ -44,12 +20,6 @@ const speedValue = document.getElementById("speedValue");
 const diamondValue = document.getElementById("diamondValue");
 const walletValue = document.getElementById("walletValue");
 const shopList = document.getElementById("shopList");
-const inventoryList = document.getElementById("inventoryList");
-const inventoryCount = document.getElementById("inventoryCount");
-const garageTabs = document.querySelectorAll(".garage-tab");
-const shopSection = document.getElementById("shopSection");
-const inventorySection = document.getElementById("inventorySection");
-const bundlesSection = document.getElementById("bundlesSection");
 const obstaclesLayer = document.getElementById("obstacles");
 const diamondsLayer = document.getElementById("diamonds");
 const heartsLayer = document.getElementById("hearts");
@@ -60,13 +30,15 @@ const crashOverlay = document.getElementById("crashOverlay");
 const shopPanel = document.getElementById("shopPanel");
 const adminPanel = document.getElementById("adminPanel");
 const messageBanner = document.getElementById("messageBanner");
-const globalMessageDisplay = document.getElementById("globalMessageDisplay");
 const startBtn = document.getElementById("startBtn");
 const shopBtn = document.getElementById("shopBtn");
 const mapSelect = document.getElementById("mapSelect");
-const playerSelect = document.getElementById("playerSelect");
 const leftBtn = document.getElementById("leftBtn");
 const rightBtn = document.getElementById("rightBtn");
+const addDiamondsBtn = document.getElementById("addDiamondsBtn");
+const addScoreBtn = document.getElementById("addScoreBtn");
+const diamondsAmount = document.getElementById("diamondsAmount");
+const scoreAmount = document.getElementById("scoreAmount");
 const giveCarsBtn = document.getElementById("giveCarsBtn");
 const startTacoEventBtn = document.getElementById("startTacoEventBtn");
 const startGalaxyEventBtn = document.getElementById("startGalaxyEventBtn");
@@ -74,19 +46,6 @@ const globalMessageInput = document.getElementById("globalMessageInput");
 const sendGlobalMessageBtn = document.getElementById("sendGlobalMessageBtn");
 const autoRaceBtn = document.getElementById("autoRaceBtn");
 const closeAdminBtn = document.getElementById("closeAdminBtn");
-const adminTargetSelect = document.getElementById("adminTargetSelect");
-const adminCarSelect = document.getElementById("adminCarSelect");
-const adminGiftDiamonds = document.getElementById("adminGiftDiamonds");
-const adminGiftScore = document.getElementById("adminGiftScore");
-const giveCarToPlayerBtn = document.getElementById("giveCarToPlayerBtn");
-const giveDiamondsToPlayerBtn = document.getElementById("giveDiamondsToPlayerBtn");
-const giveScoreToPlayerBtn = document.getElementById("giveScoreToPlayerBtn");
-const playerNameInput = document.getElementById("playerNameInput");
-const savePlayerNameBtn = document.getElementById("savePlayerNameBtn");
-const playerSetupOverlay = document.getElementById("playerSetupOverlay");
-const giftOverlay = document.getElementById("giftOverlay");
-const giftDetail = document.getElementById("giftDetail");
-const claimGiftBtn = document.getElementById("claimGiftBtn");
 const speedNeedle = document.getElementById("speedNeedle");
 const gameArea = document.getElementById("gameArea");
 const crashShopBtn = document.getElementById("crashShopBtn");
@@ -109,133 +68,12 @@ const firebaseConfig = {
   measurementId: "G-8JLWSSFN49"
 };
 
-const firebaseReady = typeof firebase !== "undefined";
-const globalMessages = firebaseReady ? (() => {
-  firebase.initializeApp(firebaseConfig);
-  return firebase.database().ref("globalMessages");
-})() : null;
-const globalEvents = firebaseReady ? firebase.database().ref("globalEvents") : null;
+firebase.initializeApp(firebaseConfig);
+const globalMessages = firebase.database().ref("globalMessages");
 
 [lobbyMusic, driveMusic, crashSound, tacoMusic, galaxyMusic].forEach((audio) => {
   audio.volume = MUSIC_VOLUME;
 });
-
-function normalizeName(value) {
-  return String(value || "").trim().replace(/\s+/g, " ");
-}
-
-function syncKnownPlayers() {
-  const profiles = JSON.parse(localStorage.getItem("lumiPlayerProfiles") || "{}");
-  const fromProfiles = Object.keys(profiles)
-    .map((name) => normalizeName(name))
-    .filter(Boolean);
-
-  const fromLegacy = (JSON.parse(localStorage.getItem("lumiKnownPlayers") || "[]"))
-    .map((name) => normalizeName(name))
-    .filter(Boolean);
-
-  const currentPlayer = normalizeName(storage.player);
-  const merged = [...fromProfiles, ...fromLegacy, ...(currentPlayer ? [currentPlayer] : [])]
-    .filter((name, index, array) => name && array.indexOf(name) === index);
-
-  localStorage.setItem("lumiKnownPlayers", JSON.stringify(merged));
-  return merged;
-}
-
-function getKnownPlayers() {
-  return syncKnownPlayers();
-}
-
-function ensurePlayerProfile(name) {
-  const safeName = normalizeName(name);
-  if (!safeName) return;
-
-  const profiles = JSON.parse(localStorage.getItem("lumiPlayerProfiles") || "{}");
-  if (!profiles[safeName]) {
-    profiles[safeName] = {
-      diamonds: 0,
-      selectedCar: "starter",
-      selectedMap: "city",
-      ownedCars: ["starter"],
-      score: 0
-    };
-  }
-
-  localStorage.setItem("lumiPlayerProfiles", JSON.stringify(profiles));
-  syncKnownPlayers();
-}
-
-function showGiftOverlay(message) {
-  giftDetail.textContent = message;
-  giftOverlay.classList.remove("hidden");
-}
-
-function hideGiftOverlay() {
-  giftOverlay.classList.add("hidden");
-  localStorage.removeItem("lumiPendingGift");
-}
-
-function scheduleGiftClaim(gift) {
-  localStorage.setItem("lumiPendingGift", JSON.stringify(gift));
-  showGiftOverlay(gift.message);
-}
-
-function processIncomingGift() {
-  const pendingGiftRaw = localStorage.getItem("lumiPendingGift");
-  if (!pendingGiftRaw) return;
-
-  try {
-    const pendingGift = JSON.parse(pendingGiftRaw);
-    if (!pendingGift || !pendingGift.message) return;
-    showGiftOverlay(pendingGift.message);
-  } catch (error) {
-    localStorage.removeItem("lumiPendingGift");
-  }
-}
-
-function refreshKnownPlayers() {
-  const names = getKnownPlayers();
-  const options = names.length ? names : [storage.player || "Player"];
-
-  const buildOptions = (select, value) => {
-    select.innerHTML = options.map((name) => `<option value="${name}">${name}</option>`).join("");
-    if (options.includes(value)) {
-      select.value = value;
-    } else if (options[0]) {
-      select.value = options[0];
-    }
-  };
-
-  buildOptions(playerSelect, storage.player);
-  buildOptions(adminTargetSelect, storage.player || options[0]);
-  adminCarSelect.innerHTML = cars
-    .filter((car) => !car.adminOnly)
-    .map((car) => `<option value="${car.id}">${car.name}</option>`)
-    .join("");
-}
-
-function saveProgress() {
-  const safeName = normalizeName(storage.player);
-  if (!safeName) {
-    localStorage.removeItem("lumiPlayer");
-    return;
-  }
-
-  ensurePlayerProfile(safeName);
-  localStorage.setItem("lumiPlayer", safeName);
-
-  const profiles = JSON.parse(localStorage.getItem("lumiPlayerProfiles") || "{}");
-  profiles[safeName] = {
-    diamonds: Number(storage.diamonds || 0),
-    selectedCar: storage.selectedCar,
-    selectedMap: storage.selectedMap,
-    ownedCars: [...storage.ownedCars],
-    score: Number(Math.floor(gameState.score || 0))
-  };
-
-  localStorage.setItem("lumiPlayerProfiles", JSON.stringify(profiles));
-  localStorage.setItem("lumiKnownPlayers", JSON.stringify(getKnownPlayers()));
-}
 
 const gameState = {
   running: false,
@@ -269,6 +107,12 @@ const gameState = {
   autoRaceTimer: 0
 };
 
+function saveProgress() {
+  localStorage.setItem("lumiDiamonds", String(storage.diamonds));
+  localStorage.setItem("lumiSelectedCar", storage.selectedCar);
+  localStorage.setItem("lumiOwnedCars", JSON.stringify(storage.ownedCars));
+}
+
 function updateHud() {
   scoreValue.textContent = `🏆 ${Math.floor(gameState.score)}`;
   const speedValueNumber = Math.min(240, Math.round(gameState.speed * 0.45));
@@ -287,66 +131,19 @@ function showBanner(text) {
   }, 1300);
 }
 
-function showGlobalMessage(message) {
-  globalMessageDisplay.textContent = message;
-  globalMessageDisplay.classList.add("visible");
-  clearTimeout(showGlobalMessage.timeoutId);
-  showGlobalMessage.timeoutId = setTimeout(() => {
-    globalMessageDisplay.classList.remove("visible");
-  }, 5000);
-}
-
 function sendGlobalMessage() {
   const message = globalMessageInput.value.trim();
   if (!message) return;
 
-  const sender = playerSelect.value === "micha" ? "Mich" : "Lukaas";
-  const fullMessage = `${sender}: ${message}`;
-  showGlobalMessage(fullMessage);
+  globalMessages.push({ message, createdAt: Date.now() });
   globalMessageInput.value = "";
-  globalMessageInput.blur();
-
-  if (!globalMessages) {
-    showBanner("Message shown locally; Firebase is unavailable");
-    return;
-  }
-
-  globalMessages.push({ message: fullMessage, createdAt: Date.now() })
-    .then(() => {
-      showBanner("Global message sent");
-    })
-    .catch(() => showBanner("Firebase rules block this message"));
+  showBanner("Global message sent");
 }
 
-if (globalMessages) {
-  globalMessages.limitToLast(1).on("child_added", (snapshot) => {
-    const data = snapshot.val();
-    if (data && data.message) showGlobalMessage(data.message);
-  });
-
-  globalMessages.on("value", () => {
-    sendGlobalMessageBtn.disabled = false;
-  }, () => showBanner("Firebase connection failed"));
-}
-
-function startGlobalEvent(eventType) {
-  if (!globalEvents) {
-    startEvent(eventType);
-    return;
-  }
-
-  globalEvents.push({ eventType, createdAt: Date.now() })
-    .catch(() => showBanner("Firebase rules block this event"));
-}
-
-if (globalEvents) {
-  globalEvents.limitToLast(1).on("child_added", (snapshot) => {
-    const data = snapshot.val();
-    if (data && (data.eventType === "taco" || data.eventType === "galaxy")) {
-      startEvent(data.eventType);
-    }
-  }, () => showBanner("Firebase event connection failed"));
-}
+globalMessages.limitToLast(1).on("child_added", (snapshot) => {
+  const data = snapshot.val();
+  if (data && data.message) showBanner(`GLOBAL: ${data.message}`);
+});
 
 function playAudio(audio) {
   audio.play().catch(() => {});
@@ -367,7 +164,7 @@ function applyMap(mapId) {
   mapSelect.value = selectedMap;
   gameArea.classList.remove("map-city", "map-desert", "map-snow");
   gameArea.classList.add(`map-${selectedMap}`);
-  saveProgress();
+  localStorage.setItem("lumiSelectedMap", selectedMap);
 }
 
 function stopEventMusic() {
@@ -469,65 +266,12 @@ function updatePlayerPosition(delta) {
   playerCar.style.transform = `translateX(-50%) scale(${gameState.boostActive ? 1.04 : 1})`;
 }
 
-function showGarageView(viewName) {
-  const nextView = viewName || "shop";
-  const isAdmin = nextView === "admin";
-
-  shopSection.classList.toggle("hidden", nextView !== "shop");
-  inventorySection.classList.toggle("hidden", nextView !== "inventory");
-  bundlesSection.classList.toggle("hidden", nextView !== "bundles");
-  adminPanel.classList.toggle("hidden", !isAdmin);
-
-  garageTabs.forEach((tab) => {
-    tab.classList.toggle("active", tab.dataset.view === nextView);
-  });
-
-  if (nextView !== "admin") {
-    shopPanel.classList.remove("hidden");
-  }
-}
-
-function renderInventory() {
-  const ownedCars = cars.filter((car) => storage.ownedCars.includes(car.id));
-  inventoryCount.textContent = `${ownedCars.length} cars`;
-
-  inventoryList.innerHTML = ownedCars.map((car) => {
-    const selected = storage.selectedCar === car.id;
-    return `
-      <div class="shop-item">
-        <div class="shop-car-preview" style="--car-image: url('${car.image}');"></div>
-        <div>
-          <h3>${car.name}</h3>
-          <p>${car.description}</p>
-        </div>
-        <button class="shop-button ${selected ? "selected" : ""}" data-car-id="${car.id}" type="button">${selected ? "Equipped" : "Use"}</button>
-      </div>
-    `;
-  }).join("");
-
-  inventoryList.querySelectorAll(".shop-button").forEach((button) => {
-    button.addEventListener("click", () => {
-      const carId = button.dataset.carId;
-      const car = cars.find((item) => item.id === carId);
-      if (!car) return;
-
-      storage.selectedCar = carId;
-      saveProgress();
-      applyCarSkin(carId);
-      renderInventory();
-      buildShop();
-      showBanner(`${car.name} equipped`);
-    });
-  });
-}
-
 function buildShop() {
   shopList.innerHTML = cars.map((car) => {
     const owned = storage.ownedCars.includes(car.id);
     const selected = storage.selectedCar === car.id;
-    const label = car.adminOnly && !owned ? "Admin only" : selected ? "Selected" : owned ? "Owned" : `Buy ${car.price}`;
-    const className = car.adminOnly && !owned ? "admin-only" : selected ? "selected" : owned ? "owned" : "locked";
-    const disabled = car.adminOnly && !owned ? "disabled" : owned ? "disabled" : "";
+    const label = car.adminOnly && !owned ? "Admin only" : selected ? "Selected" : owned ? "Use" : `Buy ${car.price}`;
+    const className = car.adminOnly && !owned ? "admin-only" : selected ? "selected" : owned ? "" : "locked";
 
     return `
       <div class="shop-item">
@@ -536,7 +280,7 @@ function buildShop() {
           <h3>${car.name}</h3>
           <p>${car.description}</p>
         </div>
-        <button class="shop-button ${className}" data-car-id="${car.id}" ${disabled}>${label}</button>
+        <button class="shop-button ${className}" data-car-id="${car.id}" ${car.adminOnly && !owned ? "disabled" : ""}>${label}</button>
       </div>
     `;
   }).join("");
@@ -545,21 +289,24 @@ function buildShop() {
     button.addEventListener("click", () => {
       const carId = button.dataset.carId;
       const car = cars.find((item) => item.id === carId);
-      if (!car) return;
+      if (!car || (car.adminOnly && !storage.ownedCars.includes(carId))) return;
 
       if (storage.ownedCars.includes(carId)) {
-        showBanner(`${car.name} is owned — equip it in Inventory`);
+        storage.selectedCar = carId;
+        saveProgress();
+        applyCarSkin(carId);
+        buildShop();
+        showBanner(`${car.name} equipped`);
         return;
       }
-
-      if (car.adminOnly) return;
 
       if (storage.diamonds >= car.price) {
         storage.diamonds -= car.price;
         storage.ownedCars.push(carId);
+        storage.selectedCar = carId;
         saveProgress();
+        applyCarSkin(carId);
         buildShop();
-        renderInventory();
         updateHud();
         showBanner(`${car.name} unlocked`);
       } else {
@@ -645,106 +392,19 @@ function finishRace() {
 }
 
 function openShop() {
+  adminPanel.classList.add("hidden");
   crashOverlay.classList.remove("visible");
   stopAudio(driveMusic);
   playAudio(lobbyMusic);
-  showGarageView("shop");
+  shopPanel.classList.remove("hidden");
   shopList.scrollIntoView({ behavior: "smooth", block: "nearest" });
   showBanner("Garage open");
 }
 
 function openAdminPanel() {
-  showGarageView("admin");
-  refreshKnownPlayers();
+  shopPanel.classList.add("hidden");
+  adminPanel.classList.remove("hidden");
   showBanner("Admin panel opened");
-}
-
-function updatePlayerProfile(targetName, updater) {
-  const safeName = normalizeName(targetName);
-  if (!safeName) return;
-
-  const profiles = JSON.parse(localStorage.getItem("lumiPlayerProfiles") || "{}");
-  const profile = profiles[safeName] || {
-    diamonds: 0,
-    selectedCar: "starter",
-    selectedMap: "city",
-    ownedCars: ["starter"],
-    score: 0
-  };
-
-  updater(profile);
-  profiles[safeName] = profile;
-  localStorage.setItem("lumiPlayerProfiles", JSON.stringify(profiles));
-  localStorage.setItem("lumiKnownPlayers", JSON.stringify(getKnownPlayers()));
-}
-
-function giftPlayer(targetName, gift) {
-  const safeName = normalizeName(targetName);
-  if (!safeName) return;
-
-  updatePlayerProfile(safeName, (profile) => {
-    if (gift.type === "car") {
-      if (!profile.ownedCars.includes(gift.carId)) {
-        profile.ownedCars.push(gift.carId);
-      }
-      profile.selectedCar = gift.carId;
-    }
-
-    if (gift.type === "diamonds") {
-      profile.diamonds = (Number(profile.diamonds) || 0) + Number(gift.amount || 0);
-    }
-
-    if (gift.type === "score") {
-      profile.score = (Number(profile.score) || 0) + Number(gift.amount || 0);
-    }
-  });
-
-  const currentUser = normalizeName(storage.player);
-  const message = gift.type === "car"
-    ? `${gift.carName} received from the admin`
-    : `${gift.amount} ${gift.type === "diamonds" ? "diamonds" : "score"} received from the admin`;
-
-  if (safeName === currentUser) {
-    showGiftOverlay(`The admin sent you a gift!\n${message}`);
-    return;
-  }
-
-  const giftStore = {
-    type: gift.type,
-    amount: gift.amount,
-    carId: gift.carId,
-    carName: gift.carName,
-    message: `The admin sent you a gift!\n${message}`,
-    target: safeName,
-    createdAt: Date.now()
-  };
-
-  localStorage.setItem(`lumiGiftFor_${safeName}`, JSON.stringify(giftStore));
-}
-
-function unlockCarForPlayer(playerName, carId) {
-  const safeName = normalizeName(playerName);
-  const car = cars.find((item) => item.id === carId);
-  if (!safeName || !car || car.adminOnly) return;
-
-  giftPlayer(safeName, { type: "car", carId, carName: car.name });
-  showBanner(`${car.name} gifted to ${safeName}`);
-}
-
-function giveDiamondsToPlayer(playerName, amount) {
-  const safeName = normalizeName(playerName);
-  if (!safeName || !Number.isFinite(amount) || amount <= 0) return;
-
-  giftPlayer(safeName, { type: "diamonds", amount });
-  showBanner(`+${amount} diamonds to ${safeName}`);
-}
-
-function giveScoreToPlayer(playerName, amount) {
-  const safeName = normalizeName(playerName);
-  if (!safeName || !Number.isFinite(amount) || amount <= 0) return;
-
-  giftPlayer(safeName, { type: "score", amount });
-  showBanner(`+${amount} score to ${safeName}`);
 }
 
 function updateAutoRaceButton() {
@@ -1064,24 +724,10 @@ function tick(timestamp) {
 
 window.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
-  const activeElement = document.activeElement;
-  const isTypingInInput = !!(activeElement && (
-    activeElement.tagName === "INPUT" ||
-    activeElement.tagName === "TEXTAREA" ||
-    activeElement.tagName === "SELECT" ||
-    activeElement.isContentEditable
-  ));
 
   if (!event.ctrlKey && !event.altKey && event.key.length === 1) {
     window.adminCommand = `${window.adminCommand || ""}${key}`.slice(-16);
     if (window.adminCommand === "openadminpanel10") openAdminPanel();
-  }
-
-  if (isTypingInInput) {
-    if (event.code === "Space") {
-      event.preventDefault();
-    }
-    return;
   }
 
   if (key === "arrowleft" || key === "a") {
@@ -1127,9 +773,11 @@ gameArea.addEventListener("touchend", (event) => {
 leftBtn.addEventListener("click", () => changeLane(-1));
 rightBtn.addEventListener("click", () => changeLane(1));
 
+addDiamondsBtn.addEventListener("click", addAdminDiamonds);
+addScoreBtn.addEventListener("click", addAdminScore);
 giveCarsBtn.addEventListener("click", giveAllCars);
-startTacoEventBtn.addEventListener("click", () => startGlobalEvent("taco"));
-startGalaxyEventBtn.addEventListener("click", () => startGlobalEvent("galaxy"));
+startTacoEventBtn.addEventListener("click", () => startEvent("taco"));
+startGalaxyEventBtn.addEventListener("click", () => startEvent("galaxy"));
 sendGlobalMessageBtn.addEventListener("click", sendGlobalMessage);
 globalMessageInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") sendGlobalMessage();
@@ -1140,50 +788,12 @@ autoRaceBtn.addEventListener("click", () => {
   showBanner(gameState.autoRace ? "Auto race active" : "Auto race off");
 });
 
-giveCarToPlayerBtn.addEventListener("click", () => {
-  const target = normalizeName(adminTargetSelect.value);
-  const carId = adminCarSelect.value;
-  if (!target || !carId) return;
-  unlockCarForPlayer(target, carId);
-});
-
-giveDiamondsToPlayerBtn.addEventListener("click", () => {
-  const target = normalizeName(adminTargetSelect.value);
-  const amount = Number(adminGiftDiamonds.value || 0);
-  if (!target || !amount || amount <= 0) return;
-  giveDiamondsToPlayer(target, amount);
-});
-
-giveScoreToPlayerBtn.addEventListener("click", () => {
-  const target = normalizeName(adminTargetSelect.value);
-  const amount = Number(adminGiftScore.value || 0);
-  if (!target || !amount || amount <= 0) return;
-  giveScoreToPlayer(target, amount);
-});
-
 closeAdminBtn.addEventListener("click", () => {
-  showGarageView("shop");
+  adminPanel.classList.add("hidden");
   showBanner("Admin panel closed");
 });
 
-garageTabs.forEach((tab) => {
-  tab.addEventListener("click", () => {
-    if (tab.dataset.view === "admin") {
-      openAdminPanel();
-      return;
-    }
-
-    showGarageView(tab.dataset.view);
-  });
-});
-
 startBtn.addEventListener("click", () => {
-  if (!storage.player || !normalizeName(storage.player)) {
-    playerSetupOverlay.classList.remove("hidden");
-    showBanner("Voer eerst je naam in");
-    return;
-  }
-
   resetGame();
 });
 
@@ -1191,65 +801,6 @@ mapSelect.addEventListener("change", () => {
   if (gameState.running) return;
   applyMap(mapSelect.value);
   showBanner(`${mapSelect.options[mapSelect.selectedIndex].text} selected`);
-});
-
-playerSelect.value = storage.player || "";
-playerSelect.addEventListener("change", () => {
-  const nextName = normalizeName(playerSelect.value);
-  if (!nextName) return;
-
-  storage.player = nextName;
-  ensurePlayerProfile(nextName);
-  localStorage.setItem("lumiPlayer", nextName);
-  refreshKnownPlayers();
-  showBanner(`Naam ingesteld: ${nextName}`);
-});
-
-savePlayerNameBtn.addEventListener("click", () => {
-  const enteredName = normalizeName(playerNameInput.value);
-  if (!enteredName) {
-    showBanner("Voer je naam in");
-    return;
-  }
-
-  const userExists = getKnownPlayers().includes(enteredName);
-  if (userExists && storage.player !== enteredName) {
-    showBanner("Deze naam is al in gebruik");
-    return;
-  }
-
-  storage.player = enteredName;
-  ensurePlayerProfile(enteredName);
-  syncKnownPlayers();
-  localStorage.setItem("lumiPlayer", enteredName);
-  refreshKnownPlayers();
-  playerSetupOverlay.classList.add("hidden");
-  showBanner(`Welkom ${enteredName}`);
-});
-
-claimGiftBtn.addEventListener("click", () => {
-  const pendingGiftKey = `lumiGiftFor_${normalizeName(storage.player)}`;
-  const pendingGiftRaw = localStorage.getItem(pendingGiftKey);
-
-  if (!pendingGiftRaw) {
-    hideGiftOverlay();
-    return;
-  }
-
-  const pendingGift = JSON.parse(pendingGiftRaw);
-  if (pendingGift && pendingGift.type === "car" && pendingGift.carId) {
-    const profile = JSON.parse(localStorage.getItem("lumiPlayerProfiles") || "{}");
-    const item = profile[normalizeName(storage.player)] || { ownedCars: ["starter"] };
-    if (!item.ownedCars.includes(pendingGift.carId)) {
-      item.ownedCars.push(pendingGift.carId);
-      profile[normalizeName(storage.player)] = item;
-      localStorage.setItem("lumiPlayerProfiles", JSON.stringify(profile));
-    }
-  }
-
-  localStorage.removeItem(pendingGiftKey);
-  hideGiftOverlay();
-  showBanner("Gift claimed");
 });
 
 shopBtn.addEventListener("click", () => {
@@ -1265,22 +816,13 @@ crashShopBtn.addEventListener("click", openShop);
 tryAgainBtn.addEventListener("click", resetGame);
 
 addCarWheels(playerCar);
-refreshKnownPlayers();
-if (!storage.player || !normalizeName(storage.player)) {
-  playerSetupOverlay.classList.remove("hidden");
-} else {
-  playerSetupOverlay.classList.add("hidden");
-}
-processIncomingGift();
-applyCarSkin(storage.selectedCar || "starter");
-applyMap(storage.selectedMap || "city");
+applyCarSkin(storage.selectedCar);
+applyMap(storage.selectedMap);
 mapSelect.disabled = false;
 movePlayer();
 updatePlayerPosition(100);
 updateHud();
 buildShop();
-renderInventory();
-showGarageView("shop");
 updateAutoRaceButton();
 playAudio(lobbyMusic);
 requestAnimationFrame(tick);
